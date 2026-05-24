@@ -1,9 +1,20 @@
-// MAIN world で動く。window.fetch が x.com コンテキストになるため
-// auth_token などのクッキーが SameSite 制限なしで自動付与され、401 が出ない。
+// MAIN world。X 自身の fetch リクエストからベアラートークンを横取りし、
+// 同じトークンで追加リクエストを発行する。ハードコード廃止。
 
 (function () {
-  const BEARER_TOKEN =
-    "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I6xMTjSjGA%3DumZgRCITtgRblFes65J8c7zOkjnA4bQ8d1-40Zs";
+  let capturedBearer = null;
+
+  // X の fetch を wrap してトークンをキャプチャ
+  const origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    const url = typeof input === "string" ? input : input?.url ?? "";
+    if (!capturedBearer && url.includes("/api/graphql/")) {
+      const auth =
+        init?.headers?.Authorization ?? init?.headers?.authorization ?? "";
+      if (auth.startsWith("Bearer ")) capturedBearer = auth.slice(7);
+    }
+    return origFetch.apply(this, arguments);
+  };
 
   const DEFAULT_FEATURES = JSON.stringify({
     graphql_timeline_v2_bookmark_timeline: true,
@@ -31,7 +42,7 @@
     vibe_api_enabled: false,
   });
 
-  // isolated world から FETCH_BOOKMARKS リクエストを受け取る
+  // isolated world からのリクエストを受け取る
   window.addEventListener("message", async (event) => {
     if (event.source !== window) return;
     if (event.data?.source !== "xbe-isolated") return;
@@ -40,7 +51,15 @@
     const { requestId, queryId, features, filter } = event.data;
 
     try {
-      const tweets = await fetchAllBookmarks(queryId, features, filter);
+      if (!capturedBearer) {
+        throw new Error(
+          "ベアラートークン未取得。ブックマークページを再読み込みして再試行してください。"
+        );
+      }
+      const csrfToken = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/)?.[1];
+      if (!csrfToken) throw new Error("ct0 クッキーが見つかりません。X にログインしてください。");
+
+      const tweets = await fetchAllBookmarks(queryId, features, filter, capturedBearer, csrfToken);
       window.postMessage(
         { source: "xbe-main", requestId, success: true, tweets },
         location.origin
@@ -52,14 +71,6 @@
       );
     }
   });
-
-  // --- CSRF トークン ---
-
-  function getCsrfToken() {
-    const match = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/);
-    if (match) return decodeURIComponent(match[1]);
-    throw new Error("ct0 クッキーが見つかりません。X にログインしてください。");
-  }
 
   // --- 日付フィルター ---
 
@@ -166,10 +177,9 @@
     return null;
   }
 
-  // --- メイン fetch ループ ---
+  // --- fetch ループ ---
 
-  async function fetchAllBookmarks(queryId, features, filter) {
-    const csrfToken = getCsrfToken();
+  async function fetchAllBookmarks(queryId, features, filter, bearerToken, csrfToken) {
     const range = getFilterRange(filter);
     const allTweets = [];
     let cursor = null;
@@ -183,12 +193,12 @@
         features: features || DEFAULT_FEATURES,
       });
 
-      const resp = await fetch(
+      const resp = await origFetch(
         `https://x.com/i/api/graphql/${queryId}/Bookmarks?${params}`,
         {
           credentials: "include",
           headers: {
-            Authorization: `Bearer ${BEARER_TOKEN}`,
+            Authorization: `Bearer ${bearerToken}`,
             "x-csrf-token": csrfToken,
             "x-twitter-auth-type": "OAuth2Session",
             "x-twitter-active-user": "yes",

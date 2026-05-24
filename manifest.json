@@ -24,7 +24,7 @@
       "matches": ["https://x.com/i/bookmarks*"],
       "js": ["content_main.js"],
       "world": "MAIN",
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": ["https://x.com/i/bookmarks*"],
