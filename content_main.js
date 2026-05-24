@@ -96,18 +96,29 @@
       for (const entry of instruction.entries ?? []) {
         if (entry.content?.entryType === "TimelineTimelineCursor") continue;
 
-        const tweetResult =
-          entry?.content?.itemContent?.tweet_results?.result ??
-          entry?.content?.itemContent?.tweet_results?.result?.tweet;
-        if (!tweetResult) continue;
+        const rawResult = entry?.content?.itemContent?.tweet_results?.result;
+        if (!rawResult) continue;
 
         entryCount++;
 
-        const legacy = tweetResult.legacy ?? tweetResult.tweet?.legacy;
-        const userLegacy =
-          tweetResult.core?.user_results?.result?.legacy ??
-          tweetResult.tweet?.core?.user_results?.result?.legacy;
-        if (!legacy || !userLegacy) continue;
+        // TweetWithVisibilityResults は .tweet に実データが入っている
+        const tweetData =
+          rawResult.__typename === "TweetWithVisibilityResults"
+            ? rawResult.tweet
+            : rawResult;
+        if (!tweetData) continue;
+
+        const legacy = tweetData.legacy;
+        if (!legacy) continue;
+
+        // ユーザー情報: result.legacy → result の直接プロパティ の順で試みる
+        const userResult = tweetData.core?.user_results?.result;
+        const screenName =
+          userResult?.legacy?.screen_name ?? userResult?.screen_name;
+        const displayName =
+          userResult?.legacy?.name ?? userResult?.name ?? screenName;
+
+        if (!screenName) continue;
 
         if (legacy.retweeted_status_id_str || legacy.full_text?.startsWith("RT @")) continue;
 
@@ -123,8 +134,8 @@
           id: legacy.id_str,
           text: legacy.full_text,
           createdAt: legacy.created_at,
-          screenName: userLegacy.screen_name,
-          displayName: userLegacy.name,
+          screenName,
+          displayName,
         });
       }
     }
