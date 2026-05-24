@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "X Bookmarks Exporter",
+  "version": "1.0.0",
+  "description": "Xのブックマークを取得してMarkdownファイルに出力します",
+  "permissions": [
+    "cookies",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*"],
+      "js": ["content_main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://x.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

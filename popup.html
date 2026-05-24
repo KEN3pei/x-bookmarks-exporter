@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X Bookmarks Exporter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <span class="logo">𝕏</span>
+        <h1>Bookmarks Exporter</h1>
+      </header>
+
+      <div id="status-box" class="status-box">
+        <span id="status-icon" class="status-icon">⏳</span>
+        <span id="status-text">確認中...</span>
+      </div>
+
+      <div class="hint" id="hint">
+        <strong>使い方：</strong>
+        <ol>
+          <li>X にログインしたまま</li>
+          <li><a href="https://x.com/i/bookmarks" target="_blank">x.com/i/bookmarks</a> を開く</li>
+          <li>このポップアップに戻る</li>
+          <li>「Markdown に出力」ボタンを押す</li>
+        </ol>
+      </div>
+
+      <button id="export-btn" disabled>Markdown に出力</button>
+
+      <div id="progress" class="progress hidden">
+        <div class="spinner"></div>
+        <span id="progress-text">ブックマークを取得中...</span>
+      </div>
+
+      <div id="result-box" class="result-box hidden">
+        <span id="result-icon">✅</span>
+        <span id="result-text"></span>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
