@@ -1,3 +1,20 @@
+// ブックマーク API の URL を監視して queryId を自動取得
+// content script 経由の通信より確実（サービスワーカーが直接受け取る）
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    const match = details.url.match(/\/graphql\/([^/]+)\/Bookmarks/);
+    if (!match) return;
+    const queryId = match[1];
+    try {
+      const features = new URL(details.url).searchParams.get("features");
+      chrome.storage.local.set({ bookmarkQueryId: queryId, bookmarkFeatures: features });
+    } catch (_) {
+      chrome.storage.local.set({ bookmarkQueryId: queryId });
+    }
+  },
+  { urls: ["https://x.com/i/api/graphql/*/Bookmarks*"] }
+);
+
 const BEARER_TOKEN =
   "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I6xMTjSjGA%3DumZgRCITtgRblFes65J8c7zOkjnA4bQ8d1-40Zs";
 
