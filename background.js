@@ -29,7 +29,7 @@ const DEFAULT_FEATURES = JSON.stringify({
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "BOOKMARK_API_DETECTED") {
-    chrome.storage.session.set({
+    chrome.storage.local.set({
       bookmarkQueryId: message.queryId,
       bookmarkFeatures: message.features,
     });
@@ -37,7 +37,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "GET_STATUS") {
-    chrome.storage.session.get(["bookmarkQueryId"], (data) => {
+    chrome.storage.local.get(["bookmarkQueryId"], (data) => {
       sendResponse({ ready: !!data.bookmarkQueryId });
     });
     return true;
@@ -222,7 +222,7 @@ async function fetchBookmarksPage(queryId, features, csrfToken, cursor = null) {
 
 async function exportBookmarks(filter) {
   const stored = await new Promise((resolve) =>
-    chrome.storage.session.get(["bookmarkQueryId", "bookmarkFeatures"], resolve)
+    chrome.storage.local.get(["bookmarkQueryId", "bookmarkFeatures"], resolve)
   );
 
   if (!stored.bookmarkQueryId) {
