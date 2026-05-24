@@ -1,21 +1,7 @@
-// MAIN world。X 自身の fetch リクエストからベアラートークンを横取りし、
-// 同じトークンで追加リクエストを発行する。ハードコード廃止。
+// MAIN world。background.js が webRequest で捕捉したベアラートークンを受け取って
+// x.com コンテキストで fetch する。window.fetch の wrap は不要。
 
 (function () {
-  let capturedBearer = null;
-
-  // X の fetch を wrap してトークンをキャプチャ
-  const origFetch = window.fetch;
-  window.fetch = function (input, init) {
-    const url = typeof input === "string" ? input : input?.url ?? "";
-    if (!capturedBearer && url.includes("/api/graphql/")) {
-      const auth =
-        init?.headers?.Authorization ?? init?.headers?.authorization ?? "";
-      if (auth.startsWith("Bearer ")) capturedBearer = auth.slice(7);
-    }
-    return origFetch.apply(this, arguments);
-  };
-
   const DEFAULT_FEATURES = JSON.stringify({
     graphql_timeline_v2_bookmark_timeline: true,
     tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: false,
@@ -42,24 +28,18 @@
     vibe_api_enabled: false,
   });
 
-  // isolated world からのリクエストを受け取る
   window.addEventListener("message", async (event) => {
     if (event.source !== window) return;
     if (event.data?.source !== "xbe-isolated") return;
     if (event.data?.type !== "FETCH_BOOKMARKS") return;
 
-    const { requestId, queryId, features, filter } = event.data;
+    const { requestId, queryId, features, filter, bearerToken } = event.data;
 
     try {
-      if (!capturedBearer) {
-        throw new Error(
-          "ベアラートークン未取得。ブックマークページを再読み込みして再試行してください。"
-        );
-      }
       const csrfToken = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/)?.[1];
       if (!csrfToken) throw new Error("ct0 クッキーが見つかりません。X にログインしてください。");
 
-      const tweets = await fetchAllBookmarks(queryId, features, filter, capturedBearer, csrfToken);
+      const tweets = await fetchAllBookmarks(queryId, features, filter, bearerToken, csrfToken);
       window.postMessage(
         { source: "xbe-main", requestId, success: true, tweets },
         location.origin
@@ -76,7 +56,6 @@
 
   function getFilterRange(filter) {
     if (!filter || filter.mode === "all") return { start: null, end: null };
-
     const todayJst = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 
     if (filter.mode === "today") {
@@ -193,12 +172,12 @@
         features: features || DEFAULT_FEATURES,
       });
 
-      const resp = await origFetch(
+      const resp = await fetch(
         `https://x.com/i/api/graphql/${queryId}/Bookmarks?${params}`,
         {
           credentials: "include",
           headers: {
-            Authorization: `Bearer ${bearerToken}`,
+            Authorization: bearerToken,
             "x-csrf-token": csrfToken,
             "x-twitter-auth-type": "OAuth2Session",
             "x-twitter-active-user": "yes",

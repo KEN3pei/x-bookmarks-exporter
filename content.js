@@ -33,6 +33,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       requestId,
       queryId: message.queryId,
       features: message.features,
+      bearerToken: message.bearerToken,
       filter: message.filter,
     },
     location.origin
