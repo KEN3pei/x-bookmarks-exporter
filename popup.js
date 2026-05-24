@@ -6,6 +6,47 @@ const progressEl = document.getElementById("progress");
 const progressText = document.getElementById("progress-text");
 const resultBox = document.getElementById("result-box");
 const resultText = document.getElementById("result-text");
+const filterDateInput = document.getElementById("filter-date");
+const filterDaysInput = document.getElementById("filter-days");
+
+// デフォルトの日付を JST の今日に設定
+filterDateInput.value = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+
+// サブ入力にフォーカスしたら対応するラジオを自動選択
+filterDateInput.addEventListener("focus", () => {
+  document.querySelector('input[name="filter-mode"][value="date"]').checked = true;
+});
+filterDaysInput.addEventListener("focus", () => {
+  document.querySelector('input[name="filter-mode"][value="days"]').checked = true;
+});
+
+function getFilter() {
+  const mode = document.querySelector('input[name="filter-mode"]:checked')?.value ?? "today";
+  if (mode === "date") {
+    const date = filterDateInput.value;
+    return date ? { mode, date } : { mode: "today" };
+  }
+  if (mode === "days") {
+    const days = parseInt(filterDaysInput.value, 10);
+    return { mode, days: isNaN(days) || days < 1 ? 7 : days };
+  }
+  return { mode };
+}
+
+function filterLabel(filter) {
+  const todayJst = new Date().toLocaleDateString("ja-JP", {
+    year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Tokyo",
+  });
+  if (filter.mode === "today") return `今日 (${todayJst})`;
+  if (filter.mode === "date") {
+    const d = new Date(filter.date + "T00:00:00+09:00").toLocaleDateString("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Tokyo",
+    });
+    return d;
+  }
+  if (filter.mode === "days") return `直近 ${filter.days} 日間`;
+  return "すべて";
+}
 
 function formatJst(dateStr) {
   try {
@@ -17,12 +58,24 @@ function formatJst(dateStr) {
   } catch { return dateStr; }
 }
 
-function tweetsToMarkdown(tweets) {
-  const today = new Date().toLocaleDateString("ja-JP", {
+function tweetsToMarkdown(tweets, filter) {
+  const now = new Date();
+  const todayJst = now.toLocaleDateString("ja-JP", {
     year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Tokyo",
   });
 
-  const lines = [`# X Bookmarks - ${today}`, "", `> 合計 **${tweets.length}** 件`, "", "---", ""];
+  let title = "# X Bookmarks";
+  if (filter.mode === "today") title += ` - ${todayJst}`;
+  else if (filter.mode === "date") {
+    const d = new Date(filter.date + "T00:00:00+09:00").toLocaleDateString("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Tokyo",
+    });
+    title += ` - ${d}`;
+  } else if (filter.mode === "days") {
+    title += ` - 直近 ${filter.days} 日間`;
+  }
+
+  const lines = [title, "", `> 合計 **${tweets.length}** 件`, "", "---", ""];
 
   for (let i = 0; i < tweets.length; i++) {
     const t = tweets[i];
@@ -76,14 +129,19 @@ function checkStatus() {
 }
 
 exportBtn.addEventListener("click", () => {
+  const filter = getFilter();
   exportBtn.disabled = true;
-  showProgress("ブックマークを取得中...");
+  showProgress(`取得中... (${filterLabel(filter)})`);
 
-  chrome.runtime.sendMessage({ type: "EXPORT_BOOKMARKS" }, (res) => {
+  chrome.runtime.sendMessage({ type: "EXPORT_BOOKMARKS", filter }, (res) => {
     if (res?.success) {
-      const md = tweetsToMarkdown(res.tweets);
+      const md = tweetsToMarkdown(res.tweets, filter);
       const date = new Date().toISOString().slice(0, 10);
-      triggerDownload(md, `x-bookmarks-${date}.md`);
+      const suffix = filter.mode === "today" ? date
+        : filter.mode === "date" ? filter.date
+        : filter.mode === "days" ? `${date}_last${filter.days}days`
+        : date + "_all";
+      triggerDownload(md, `x-bookmarks-${suffix}.md`);
       showResult(`${res.tweets.length} 件をエクスポートしました！`);
     } else {
       showResult(res?.error ?? "不明なエラーが発生しました。", true);

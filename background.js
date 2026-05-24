@@ -44,7 +44,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "EXPORT_BOOKMARKS") {
-    exportBookmarks()
+    const filter = message.filter ?? { mode: "today" };
+    exportBookmarks(filter)
       .then((result) => sendResponse(result))
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
@@ -52,6 +53,125 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return false;
 });
+
+// --- 日付範囲計算 ---
+
+function getFilterRange(filter) {
+  if (filter.mode === "all") return { start: null, end: null };
+
+  // JST の今日の日付文字列 "YYYY-MM-DD"
+  const todayJst = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+
+  if (filter.mode === "today") {
+    return {
+      start: new Date(todayJst + "T00:00:00+09:00"),
+      end: new Date(todayJst + "T23:59:59.999+09:00"),
+    };
+  }
+
+  if (filter.mode === "date") {
+    return {
+      start: new Date(filter.date + "T00:00:00+09:00"),
+      end: new Date(filter.date + "T23:59:59.999+09:00"),
+    };
+  }
+
+  if (filter.mode === "days") {
+    const days = Math.max(1, filter.days ?? 7);
+    const end = new Date(todayJst + "T23:59:59.999+09:00");
+    const start = new Date(todayJst + "T00:00:00+09:00");
+    start.setDate(start.getDate() - (days - 1));
+    return { start, end };
+  }
+
+  return { start: null, end: null };
+}
+
+// --- ツイート抽出（日付フィルタ付き） ---
+
+function extractTweetsWithFilter(data, range) {
+  const tweets = [];
+  let hasOlderTweets = false; // start より古いツイートを検出したら早期終了フラグ
+  let entryCount = 0;
+
+  const instructions =
+    data?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
+
+  for (const instruction of instructions) {
+    if (instruction.type !== "TimelineAddEntries") continue;
+
+    for (const entry of instruction.entries ?? []) {
+      // カーソルエントリはスキップ
+      if (entry.content?.entryType === "TimelineTimelineCursor") continue;
+
+      const tweetResult =
+        entry?.content?.itemContent?.tweet_results?.result ??
+        entry?.content?.itemContent?.tweet_results?.result?.tweet;
+      if (!tweetResult) continue;
+
+      entryCount++;
+
+      const legacy = tweetResult.legacy ?? tweetResult.tweet?.legacy;
+      const userLegacy =
+        tweetResult.core?.user_results?.result?.legacy ??
+        tweetResult.tweet?.core?.user_results?.result?.legacy;
+      if (!legacy || !userLegacy) continue;
+
+      // リツイートを除外
+      if (legacy.retweeted_status_id_str || legacy.full_text?.startsWith("RT @")) continue;
+
+      const tweetDate = new Date(legacy.created_at);
+
+      // start より古い → 以降のページも不要
+      if (range.start && tweetDate < range.start) {
+        hasOlderTweets = true;
+        continue;
+      }
+
+      // end より新しい → このページはスキップ、次ページに範囲内のものがある可能性あり
+      if (range.end && tweetDate > range.end) continue;
+
+      tweets.push({
+        id: legacy.id_str,
+        text: legacy.full_text,
+        createdAt: legacy.created_at,
+        screenName: userLegacy.screen_name,
+        displayName: userLegacy.name,
+      });
+    }
+  }
+
+  return { tweets, hasOlderTweets, entryCount };
+}
+
+// --- ページネーション ---
+
+function extractNextCursor(data) {
+  const instructions =
+    data?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
+
+  for (const instruction of instructions) {
+    if (instruction.type === "TimelineAddEntries") {
+      for (const entry of instruction.entries ?? []) {
+        if (
+          entry.content?.entryType === "TimelineTimelineCursor" &&
+          entry.content?.cursorType === "Bottom"
+        ) {
+          return entry.content.value;
+        }
+      }
+    }
+    if (instruction.type === "TimelineReplaceEntry") {
+      if (instruction.entry?.content?.cursorType === "Bottom") {
+        return instruction.entry.content.value;
+      }
+    }
+  }
+
+  return null;
+}
+
+// --- API 呼び出し ---
 
 function getCookie(name) {
   return new Promise((resolve, reject) => {
@@ -98,70 +218,9 @@ async function fetchBookmarksPage(queryId, features, csrfToken, cursor = null) {
   return response.json();
 }
 
-function extractTweets(data) {
-  const tweets = [];
-  const instructions =
-    data?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
+// --- メインエクスポート処理 ---
 
-  for (const instruction of instructions) {
-    if (instruction.type !== "TimelineAddEntries") continue;
-
-    for (const entry of instruction.entries ?? []) {
-      const tweetResult =
-        entry?.content?.itemContent?.tweet_results?.result ??
-        entry?.content?.itemContent?.tweet_results?.result?.tweet;
-
-      if (!tweetResult) continue;
-
-      const legacy = tweetResult.legacy ?? tweetResult.tweet?.legacy;
-      const userLegacy =
-        tweetResult.core?.user_results?.result?.legacy ??
-        tweetResult.tweet?.core?.user_results?.result?.legacy;
-
-      if (!legacy || !userLegacy) continue;
-
-      // リツイートを除外
-      if (legacy.retweeted_status_id_str || legacy.full_text?.startsWith("RT @")) continue;
-
-      tweets.push({
-        id: legacy.id_str,
-        text: legacy.full_text,
-        createdAt: legacy.created_at,
-        screenName: userLegacy.screen_name,
-        displayName: userLegacy.name,
-      });
-    }
-  }
-
-  return tweets;
-}
-
-function extractNextCursor(data) {
-  const instructions =
-    data?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
-
-  for (const instruction of instructions) {
-    if (instruction.type === "TimelineAddEntries") {
-      for (const entry of instruction.entries ?? []) {
-        if (
-          entry.content?.entryType === "TimelineTimelineCursor" &&
-          entry.content?.cursorType === "Bottom"
-        ) {
-          return entry.content.value;
-        }
-      }
-    }
-    if (instruction.type === "TimelineReplaceEntry") {
-      if (instruction.entry?.content?.cursorType === "Bottom") {
-        return instruction.entry.content.value;
-      }
-    }
-  }
-
-  return null;
-}
-
-async function exportBookmarks() {
+async function exportBookmarks(filter) {
   const stored = await new Promise((resolve) =>
     chrome.storage.session.get(["bookmarkQueryId", "bookmarkFeatures"], resolve)
   );
@@ -173,6 +232,7 @@ async function exportBookmarks() {
   }
 
   const csrfToken = await getCookie("ct0");
+  const range = getFilterRange(filter);
 
   const allTweets = [];
   let cursor = null;
@@ -185,14 +245,17 @@ async function exportBookmarks() {
       cursor
     );
 
-    const tweets = extractTweets(data);
+    const { tweets, hasOlderTweets, entryCount } = extractTweetsWithFilter(data, range);
     allTweets.push(...tweets);
 
+    // start より古いツイートに到達 → 以降のページは不要
+    if (hasOlderTweets) break;
+
     const nextCursor = extractNextCursor(data);
-    if (!nextCursor || tweets.length === 0) break;
+    // 次ページなし、またはエントリが空
+    if (!nextCursor || entryCount === 0) break;
 
     cursor = nextCursor;
-
     await new Promise((r) => setTimeout(r, 500));
   }
 

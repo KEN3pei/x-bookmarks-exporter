@@ -24,8 +24,31 @@
           <li>X にログインしたまま</li>
           <li><a href="https://x.com/i/bookmarks" target="_blank">x.com/i/bookmarks</a> を開く</li>
           <li>このポップアップに戻る</li>
-          <li>「Markdown に出力」ボタンを押す</li>
+          <li>取得範囲を設定して「Markdown に出力」を押す</li>
         </ol>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-title">取得範囲</div>
+        <label class="filter-option">
+          <input type="radio" name="filter-mode" value="today" checked>
+          <span class="filter-label">今日のみ</span>
+        </label>
+        <label class="filter-option">
+          <input type="radio" name="filter-mode" value="date">
+          <span class="filter-label">指定日</span>
+          <input type="date" id="filter-date" class="filter-input">
+        </label>
+        <label class="filter-option">
+          <input type="radio" name="filter-mode" value="days">
+          <span class="filter-label">直近</span>
+          <input type="number" id="filter-days" class="filter-input filter-input--num" min="1" max="365" value="7">
+          <span class="filter-label">日間</span>
+        </label>
+        <label class="filter-option">
+          <input type="radio" name="filter-mode" value="all">
+          <span class="filter-label">すべて</span>
+        </label>
       </div>
 
       <button id="export-btn" disabled>Markdown に出力</button>
