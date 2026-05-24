@@ -90,20 +90,32 @@
     const instructions =
       data?.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
 
+    console.log("[XBE] instructions count:", instructions.length);
+    console.log("[XBE] data keys:", Object.keys(data ?? {}));
+    console.log("[XBE] data.data keys:", Object.keys(data?.data ?? {}));
+
     for (const instruction of instructions) {
+      console.log("[XBE] instruction type:", instruction.type, "entries:", instruction.entries?.length);
       if (instruction.type !== "TimelineAddEntries") continue;
 
       for (const entry of instruction.entries ?? []) {
         if (entry.content?.entryType === "TimelineTimelineCursor") continue;
 
         const rawResult = entry?.content?.itemContent?.tweet_results?.result;
-        if (!rawResult) continue;
+        if (!rawResult) {
+          console.log("[XBE] no rawResult for entry entryType:", entry.content?.entryType, "itemContent keys:", Object.keys(entry?.content?.itemContent ?? {}));
+          continue;
+        }
 
         entryCount++;
+        console.log("[XBE] rawResult.__typename:", rawResult.__typename, "has legacy:", !!rawResult.legacy, "has tweet:", !!rawResult.tweet);
 
         // legacy (full_text, created_at 等) は TweetWithVisibilityResults でも外側に存在する
         const legacy = rawResult.legacy;
-        if (!legacy) continue;
+        if (!legacy) {
+          console.log("[XBE] no legacy on rawResult, keys:", Object.keys(rawResult));
+          continue;
+        }
 
         // ユーザー情報: TweetWithVisibilityResults の場合は .tweet 配下、通常 Tweet は直接
         const tweetNode =
@@ -116,7 +128,12 @@
         const displayName =
           userResult?.legacy?.name ?? userResult?.name ?? screenName;
 
-        if (!screenName) continue;
+        console.log("[XBE] screenName:", screenName, "tweetNode keys:", Object.keys(tweetNode ?? {}));
+
+        if (!screenName) {
+          console.log("[XBE] no screenName - userResult:", JSON.stringify(userResult)?.slice(0, 200));
+          continue;
+        }
 
         if (legacy.retweeted_status_id_str || legacy.full_text?.startsWith("RT @")) continue;
 
