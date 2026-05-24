@@ -43,12 +43,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // --- 認証 ---
 
 function getCsrfToken() {
-  return new Promise((resolve, reject) => {
-    chrome.cookies.get({ url: "https://x.com", name: "ct0" }, (cookie) => {
-      if (cookie) resolve(cookie.value);
-      else reject(new Error("ct0 クッキーが見つかりません。X にログインしてください。"));
-    });
-  });
+  // content script では chrome.cookies は使えないので document.cookie から読む
+  // ct0 は HttpOnly ではないため JS から参照可能
+  const match = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/);
+  if (match) return Promise.resolve(decodeURIComponent(match[1]));
+  return Promise.reject(new Error("ct0 クッキーが見つかりません。X にログインしてください。"));
 }
 
 // --- 日付フィルター ---
