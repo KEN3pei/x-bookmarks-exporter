@@ -101,18 +101,16 @@
 
         entryCount++;
 
-        // TweetWithVisibilityResults は .tweet に実データが入っている
-        const tweetData =
+        // legacy (full_text, created_at 等) は TweetWithVisibilityResults でも外側に存在する
+        const legacy = rawResult.legacy;
+        if (!legacy) continue;
+
+        // ユーザー情報: TweetWithVisibilityResults の場合は .tweet 配下、通常 Tweet は直接
+        const tweetNode =
           rawResult.__typename === "TweetWithVisibilityResults"
             ? rawResult.tweet
             : rawResult;
-        if (!tweetData) continue;
-
-        const legacy = tweetData.legacy;
-        if (!legacy) continue;
-
-        // ユーザー情報: result.legacy → result の直接プロパティ の順で試みる
-        const userResult = tweetData.core?.user_results?.result;
+        const userResult = tweetNode?.core?.user_results?.result;
         const screenName =
           userResult?.legacy?.screen_name ?? userResult?.screen_name;
         const displayName =
