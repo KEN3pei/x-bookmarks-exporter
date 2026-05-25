@@ -22,6 +22,11 @@ Xの投稿はAiでクローリングできないようになっている。そ�
 4. 「準備完了」と表示されたら **「Markdown に出力」** を押す
 5. `x-bookmarks-YYYY-MM-DD.md` がダウンロードされる
 
+イメージ：
+
+<img width="600" alt="スクリーンショット 2026-05-25 20 25 07" src="https://github.com/user-attachments/assets/3f4db8e5-fad1-493a-9c68-aa20fb31bb3b" />
+
+
 ## 出力形式
 
 ```markdown
