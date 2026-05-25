@@ -79,8 +79,8 @@ function tweetsToMarkdown(tweets, filter) {
 
   for (let i = 0; i < tweets.length; i++) {
     const t = tweets[i];
-    const url = `https://x.com/${t.screenName}/status/${t.id}`;
-    lines.push(`## ${i + 1}. ${t.displayName} (@${t.screenName})`, "");
+    const url = `https://x.com/i/web/status/${t.id}`;
+    lines.push(`## ${i + 1}.`);
     lines.push(`- **投稿日時**: ${formatJst(t.createdAt)}`);
     lines.push(`- **URL**: <${url}>`, "");
     lines.push(t.text, "", "---", "");
