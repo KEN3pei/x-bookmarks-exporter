@@ -61,25 +61,53 @@ async function exportViaContentScript(filter) {
     throw new Error("ブックマークページ（x.com/i/bookmarks）を開いてください。");
   }
 
+  const tabId = tabs[0].id;
+  const msg = {
+    type: "FETCH_BOOKMARKS",
+    queryId: stored.bookmarkQueryId,
+    features: stored.bookmarkFeatures,
+    bearerToken: stored.bearerToken,
+    filter,
+  };
+
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(
-      tabs[0].id,
-      {
-        type: "FETCH_BOOKMARKS",
-        queryId: stored.bookmarkQueryId,
-        features: stored.bookmarkFeatures,
-        bearerToken: stored.bearerToken,
-        filter,
-      },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else if (response?.success) {
-          resolve(response);
-        } else {
-          reject(new Error(response?.error ?? "不明なエラー"));
+    chrome.tabs.sendMessage(tabId, msg, async (response) => {
+      if (chrome.runtime.lastError) {
+        const err = chrome.runtime.lastError.message ?? "";
+        if (!err.includes("Receiving end does not exist")) {
+          return reject(new Error(err));
         }
+        // コンテンツスクリプト未注入 → 再注入してリトライ
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ["content_main.js"],
+            world: "MAIN",
+          });
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ["content.js"],
+          });
+          await new Promise((r) => setTimeout(r, 300));
+          chrome.tabs.sendMessage(tabId, msg, (res2) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else if (res2?.success) {
+              resolve(res2);
+            } else {
+              reject(new Error(res2?.error ?? "不明なエラー"));
+            }
+          });
+        } catch (injectErr) {
+          reject(new Error("スクリプト注入に失敗しました: " + injectErr.message));
+        }
+        return;
       }
-    );
+      if (response?.success) {
+        resolve(response);
+      } else {
+        reject(new Error(response?.error ?? "不明なエラー"));
+      }
+    });
   });
 }
