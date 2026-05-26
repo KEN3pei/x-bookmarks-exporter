@@ -114,10 +114,17 @@
         }
         if (range.end && tweetDate > range.end) continue;
 
+        // 引用ツイートの本文を取得
+        const quotedRaw = rawResult.quoted_status_result?.result;
+        const quotedLegacy = quotedRaw?.__typename === "TweetWithVisibilityResults"
+          ? quotedRaw.tweet?.legacy
+          : quotedRaw?.legacy;
+
         tweets.push({
           id: legacy.id_str,
           text: legacy.full_text,
           createdAt: legacy.created_at,
+          quotedText: quotedLegacy?.full_text ?? null,
         });
       }
     }

@@ -83,7 +83,11 @@ function tweetsToMarkdown(tweets, filter) {
     lines.push(`## ${i + 1}.`);
     lines.push(`- **投稿日時**: ${formatJst(t.createdAt)}`);
     lines.push(`- **URL**: <${url}>`, "");
-    lines.push(t.text, "", "---", "");
+    lines.push(t.text, "");
+    if (t.quotedText) {
+      lines.push(t.quotedText.split("\n").map(l => `> ${l}`).join("\n"), "");
+    }
+    lines.push("---", "");
   }
 
   return lines.join("\n");
