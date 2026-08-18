@@ -120,11 +120,20 @@
           ? quotedRaw.tweet?.legacy
           : quotedRaw?.legacy;
 
+        const noteText = rawResult.note_tweet?.note_tweet_results?.result?.text ?? null;
+
+        const articleResult = rawResult.article?.article_results?.result ?? null;
+        const articleText = articleResult
+          ? `[X記事] ${articleResult.title}\n\n${articleResult.preview_text}\n\nhttps://x.com/i/article/${articleResult.rest_id}`
+          : null;
+
         tweets.push({
           id: legacy.id_str,
-          text: legacy.full_text,
+          text: noteText ?? articleText ?? legacy.full_text,
           createdAt: legacy.created_at,
           quotedText: quotedLegacy?.full_text ?? null,
+          articleRestId: articleResult?.rest_id ?? null,
+          articleTitle: articleResult?.title ?? null,
         });
       }
     }
@@ -154,6 +163,56 @@
       }
     }
     return null;
+  }
+
+  // --- X記事全文取得（iframe経由） ---
+
+  async function fetchArticleContent(articleRestId) {
+    return new Promise((resolve) => {
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;width:1px;height:1px;top:-9999px;left:-9999px;visibility:hidden;";
+      iframe.src = `/i/article/${articleRestId}`;
+
+      const TIMEOUT = 15000;
+      const POLL_MS = 600;
+      let elapsed = 0;
+
+      function poll() {
+        elapsed += POLL_MS;
+
+        try {
+          const doc = iframe.contentDocument;
+          if (!doc || doc.readyState === "loading") {
+            if (elapsed > TIMEOUT) { cleanup(null); return; }
+            setTimeout(poll, POLL_MS);
+            return;
+          }
+
+          const el =
+            doc.querySelector('[data-testid="twitterArticleRichTextView"]') ||
+            doc.querySelector('[data-testid="longformRichTextComponent"]');
+
+          if (el && el.innerText.trim().length > 100) {
+            cleanup(el.innerText.trim());
+            return;
+          }
+
+          if (elapsed > TIMEOUT) { cleanup(null); return; }
+
+          setTimeout(poll, POLL_MS);
+        } catch (_) {
+          cleanup(null);
+        }
+      }
+
+      function cleanup(result) {
+        iframe.remove();
+        resolve(result);
+      }
+
+      iframe.addEventListener("load", () => setTimeout(poll, 1500));
+      document.body.appendChild(iframe);
+    });
   }
 
   // --- fetch ループ ---
@@ -198,6 +257,12 @@
 
       cursor = nextCursor;
       await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // X記事の全文をiframe経由で順次取得
+    for (const t of allTweets.filter(u => u.articleRestId)) {
+      const content = await fetchArticleContent(t.articleRestId).catch(() => null);
+      if (content) t.text = `[X記事] ${t.articleTitle}\n\n${content}`;
     }
 
     return allTweets;

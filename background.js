@@ -24,6 +24,31 @@ chrome.webRequest.onSendHeaders.addListener(
   ["requestHeaders", "extraHeaders"]
 );
 
+// X記事ページをiframeに読み込むため、サブフレームロード時のフレーミング制限ヘッダーを除去する
+chrome.runtime.onInstalled.addListener(setupFramingRule);
+chrome.runtime.onStartup.addListener(setupFramingRule);
+
+async function setupFramingRule() {
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [1],
+    addRules: [{
+      id: 1,
+      priority: 1,
+      action: {
+        type: "modifyHeaders",
+        responseHeaders: [
+          { header: "x-frame-options", operation: "remove" },
+          { header: "content-security-policy", operation: "remove" },
+        ],
+      },
+      condition: {
+        urlFilter: "https://x.com/i/article/*",
+        resourceTypes: ["sub_frame"],
+      },
+    }],
+  });
+}
+
 // popup.js からのメッセージを処理
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "GET_STATUS") {
@@ -50,15 +75,17 @@ async function exportViaContentScript(filter) {
     "bearerToken",
   ]);
   if (!stored.bookmarkQueryId) {
-    throw new Error("x.com/i/bookmarks を開いてページを読み込んでから再試行してください。");
+    throw new Error("x.com/i/history を開いてページを読み込んでから再試行してください。");
   }
   if (!stored.bearerToken) {
     throw new Error("ベアラートークン未取得。ブックマークページを再読み込みして再試行してください。");
   }
 
-  const tabs = await chrome.tabs.query({ url: "https://x.com/i/bookmarks*" });
+  const tabs = await chrome.tabs.query({
+    url: ["https://x.com/i/history*", "https://x.com/i/bookmarks*"],
+  });
   if (tabs.length === 0) {
-    throw new Error("ブックマークページ（x.com/i/bookmarks）を開いてください。");
+    throw new Error("ブックマークページ（x.com/i/history）を開いてください。");
   }
 
   const tabId = tabs[0].id;
