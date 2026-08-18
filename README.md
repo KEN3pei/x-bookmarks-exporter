@@ -17,7 +17,7 @@ Xの投稿はAiでクローリングできないようになっている。そ�
 ## 使い方
 
 1. X (<https://x.com>) にログインする
-2. **<https://x.com/i/bookmarks>** を開いてページが読み込まれるのを待つ
+2. **<https://x.com/i/history>** を開いてページが読み込まれるのを待つ
 3. ブラウザのツールバーから **X Bookmarks Exporter** アイコンをクリック
 4. 「準備完了」と表示されたら **「Markdown に出力」** を押す
 5. `x-bookmarks-YYYY-MM-DD.md` がダウンロードされる

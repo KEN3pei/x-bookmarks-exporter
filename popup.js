@@ -106,7 +106,7 @@ function setStatus(ready) {
     exportBtn.disabled = false;
   } else {
     statusBox.className = "status-box";
-    statusText.textContent = "x.com/i/bookmarks を開いてください。";
+    statusText.textContent = "x.com/i/history を開いてください。";
     hintEl.style.display = "";
     exportBtn.disabled = true;
   }
